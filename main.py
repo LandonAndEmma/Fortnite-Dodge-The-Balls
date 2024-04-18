@@ -1,138 +1,118 @@
 import pygame
 import random
-
-# Initialize Pygame
+import sys
 pygame.init()
 pygame.mixer.init()
 pygame.mixer.music.load("music/lobby.mp3")
 pygame.mixer.music.play(-1)
-
-
-def definescore():
-    global SCORE
-    SCORE = 0
-
-
-# Constants
 WIDTH, HEIGHT = 1920, 1080
-PLAYER_SPEED = 2
-ENEMY_SPEED = 2
-font = pygame.font.Font(None, 36)
-run_once = 0
-if run_once == 0:
-    definescore()
-    run_once = 1
-# Colors
+BASE_PLAYER_SPEED = 6
+BASE_ENEMY_SPEED = 4
+MAX_PLAYER_SPEED = 24
+MAX_ENEMY_SPEED = 100
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
-# Create the screen
+SCORE = 0
+TIME_TO_INCREASE_SPEED = 6000
+STARTING_BALL_SPAWN_PROBABILITY = 0.02
+MAX_BALL_SPAWN_PROBABILITY = 0.2
+BALL_SPAWN_INCREASE_RATE = 0.0001
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Dodge The Balls")
-# Load the logo image
+font = pygame.font.Font(None, 36)
 logo_img = pygame.image.load("sprites/logo.png")
-logo_rect = logo_img.get_rect()
-logo_rect.center = (WIDTH // 2, HEIGHT // 2)
-# Enemies
-enemies = []
+player_img = pygame.image.load("sprites/jonesy.png")
 enemy_img = pygame.image.load("sprites/ball.png")
-
-
-# Initialize player function
 def initialize_player():
-    player_img = pygame.image.load("sprites/jonesy.png")
-    player_rect = player_img.get_rect()
-    player_rect.centerx = WIDTH // 2
-    player_rect.bottom = HEIGHT - 10
-    return player_img, player_rect
-
-
-# Title screen function
-def title_screen():
-    title = True
-    while title:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_SPACE]:
-            title = False
-        # Display the "Press Space to Start" message and logo
-        screen.fill(WHITE)
-        screen.blit(logo_img, logo_rect)
-        text = font.render("Press Space to Start", True, RED)
-        text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT - 50))
-        screen.blit(text, text_rect)
-        pygame.display.update()
-
-
-# Initialize player
-player_img, player_rect = initialize_player()
-# Call the title screen function
-title_screen()
-# Initialize the score
-definescore()
-# Game loop
-running = True
-game_over = False
-while running:
-    score_text = font.render(f'Score: {SCORE}', True, (0, 255, 255))
-    screen.blit(score_text, (0, 0))
+    player_rect = player_img.get_rect(centerx=WIDTH // 2, bottom=HEIGHT - 10)
+    return player_rect
+def draw_text(text, color, x, y):
+    score_text = font.render(text, True, color)
+    screen.blit(score_text, (x, y))
+def spawn_enemy():
+    if random.random() < BALL_SPAWN_PROBABILITY:
+        return enemy_img.get_rect(midtop=(random.randint(0, WIDTH), 0))
+    return None
+def game_over_screen():
+    text = font.render("Game Over! Press R to restart or X to quit.", True, RED)
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    screen.blit(text, text_rect)
+    pygame.display.update()
+def restart_game():
+    pygame.mixer.music.load("music/lobby.mp3")
+    pygame.mixer.music.play(-1)
+    global SCORE
+    SCORE = 0
+    return initialize_player(), []
+player_rect = initialize_player()
+enemies = []
+run_title_screen = True
+while run_title_screen:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
+            pygame.quit()
+            sys.exit()
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_SPACE]:
+        run_title_screen = False
+    screen.fill(WHITE)
+    screen.blit(logo_img, (WIDTH // 2 - logo_img.get_width() // 2, HEIGHT // 2 - logo_img.get_height() // 2))
+    draw_text("Press Space to Start", RED, WIDTH // 2, HEIGHT - 50)
+    pygame.display.update()
+running = True
+game_over = False
+clock = pygame.time.Clock()
+start_time = pygame.time.get_ticks()
+ball_spawn_increase_timer = 0
+while running:
+    clock.tick(120)
+    screen.fill(WHITE)
+    draw_text(f'Score: {SCORE}', (0, 255, 255), 10, 10)
+    elapsed_time = pygame.time.get_ticks() - start_time
+    player_speed = min(BASE_PLAYER_SPEED + elapsed_time / TIME_TO_INCREASE_SPEED, MAX_PLAYER_SPEED)
+    enemy_speed = min(BASE_ENEMY_SPEED + elapsed_time / TIME_TO_INCREASE_SPEED, MAX_ENEMY_SPEED)
+    time_till_increase = max(0, TIME_TO_INCREASE_SPEED - elapsed_time)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
     if not game_over:
-        # Player movement
+        BALL_SPAWN_PROBABILITY = min(STARTING_BALL_SPAWN_PROBABILITY + ball_spawn_increase_timer * BALL_SPAWN_INCREASE_RATE, MAX_BALL_SPAWN_PROBABILITY)
+        draw_text(f'Player Speed: {player_speed:.2f}', (0, 255, 0), 10, 40)
+        draw_text(f'Enemy Speed: {enemy_speed:.2f}', (0, 0, 255), 10, 80)
+        draw_text(f'Enemy Probability: {BALL_SPAWN_PROBABILITY:.2f}', (255, 0, 0), 10, 120)
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            player_rect.x -= PLAYER_SPEED
-        if keys[pygame.K_RIGHT]:
-            player_rect.x += PLAYER_SPEED
+        player_rect.x -= (keys[pygame.K_LEFT] - keys[pygame.K_RIGHT]) * player_speed
         player_rect.x = max(0, min(player_rect.x, WIDTH - player_rect.width))
-        # Enemy spawning
-        if random.randint(1, 100) <= 2:
-            enemy = enemy_img.get_rect(midtop=(random.randint(0, WIDTH), 0))
-            enemies.append(enemy)
-        # Move enemies and remove those that go off the screen
-        new_enemies = []
-        for enemy in enemies:
-            enemy.y += ENEMY_SPEED
-            if enemy.y <= 1080:
-                new_enemies.append(enemy)
-            else:
-                SCORE += 1  # Increment the score when an enemy goes off the screen
+        new_enemies = [enemy for enemy in enemies if enemy.y < HEIGHT]
+        enemy = spawn_enemy()
+        if enemy:
+            new_enemies.append(enemy)
         enemies = new_enemies
-        # Collision detection
+        for enemy in enemies:
+            enemy.y += enemy_speed
+            if enemy.y >= HEIGHT:
+                SCORE += 1
+                enemies.remove(enemy)
         for enemy in enemies:
             if player_rect.colliderect(enemy):
                 game_over = True
                 pygame.mixer.music.load("sfx/death.mp3")
                 pygame.mixer.music.play(0)
-        # Clear the screen
-        screen.fill(WHITE)
-        # Draw player
         screen.blit(player_img, player_rect)
-        # Draw enemies
         for enemy in enemies:
             screen.blit(enemy_img, enemy)
-        screen.blit(score_text, (0, 0))
-        pygame.display.update()
-
     if game_over:
-        text = font.render("Game Over! Press R to restart or X to quit.", True, RED)
-        text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
-        screen.blit(text, text_rect)
-        pygame.display.update()
-        # Check for game restart
+        game_over_screen()
         keys = pygame.key.get_pressed()
         if keys[pygame.K_r]:
-            pygame.mixer.music.load("music/lobby.mp3")
-            pygame.mixer.music.play(-1)
-            enemies = []
+            player_rect, enemies = restart_game()
             game_over = False
-            definescore()  # Reset the score when restarting
-            player_img, player_rect = initialize_player()
-        if keys[pygame.K_x]:
+            start_time = pygame.time.get_ticks()
+            ball_spawn_increase_timer = 0
+        elif keys[pygame.K_x]:
             pygame.quit()
-# Quit Pygame
+            sys.exit()
+    pygame.display.update()
+    ball_spawn_increase_timer += 1
 pygame.quit()
